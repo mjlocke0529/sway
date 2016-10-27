@@ -4,19 +4,13 @@ var favicon = require('serve-favicon');
 var logger = require('morgan');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
-
+var flash    = require('connect-flash');
+var passport = require('passport');
+var Strategy = require('passport-local').Strategy;
+var session = require('express-session');
 var routes = require('./routes/index');
 var users = require('./routes/users');
-var mongo = require('mongo');
-
-var passport = require('passport')
-  , LocalStrategy = require('passport-local').Strategy;
-
-var mongoose = require('mongoose');
-mongoose.connect('mongodb://admin:Matt0529$@ds031617.mlab.com:31617/sway');
-var db = mongoose.connection;
-
-
+var db = require('./db');
 var app = express();
 
 // view engine setup
@@ -25,14 +19,49 @@ app.set('view engine', 'pug');
 
 // uncomment after placing your favicon in /public
 //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
+
+
+
+
+// Configure the local strategy for use by Passport.
+passport.use(new Strategy(
+  function(username, password, cb) {
+    db.users.findByUsername(username, function(err, user) {
+      if (err) { return cb(err); }
+      if (!user) { return cb(null, false); }
+      if (user.password != password) { return cb(null, false); }
+      return cb(null, user);
+    });
+  }));
+
+// Configure Passport authenticated session persistence.
+passport.serializeUser(function(user, cb) {
+  cb(null, user.id);
+});
+
+passport.deserializeUser(function(id, cb) {
+  db.users.findById(id, function (err, user) {
+    if (err) { return cb(err); }
+    cb(null, user);
+  });
+});
+
+
+
 app.use(logger('dev'));
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(require('express-session')({ secret: 'keyboard cat', resave: false, saveUninitialized: false }));
+app.use(passport.initialize());
+app.use(passport.session());
 
+//routes
 app.use('/', routes);
 app.use('/users', users);
+//app.use(require('morgan')('combined'));
+
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
@@ -64,6 +93,7 @@ app.use(function(err, req, res, next) {
     error: {}
   });
 });
+
 
 
 module.exports = app;
